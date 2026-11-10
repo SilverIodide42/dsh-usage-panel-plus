@@ -1,0 +1,26 @@
+node_modules/
+lib/
+dist/
+*.log
+.DS_Store
+.vscode/
+.idea/
+coverage/
+.zcode/
+*.tgz
+dsh-*.png
+verify-redesign-*.png
+.reasonix/
+.verify-backup/
+.mnemon/
+scripts/*-section.png
+# Markdown under docs/ is local working material — migration plans, design
+# drafts, prompts — with exceptions: docs/design.md is the shipped design
+# note, and the two derivative-work documents are part of the open-source
+# release. Release notes are covered by the same rule; every release's
+# notes are generated into the GitHub Release by .github/workflows/release.yml
+# rather than carried in the repository.
+docs/*.md
+!docs/design.md
+!docs/ENHANCEMENTS.md
+!docs/QA.md
