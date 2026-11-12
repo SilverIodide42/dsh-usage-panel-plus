@@ -395,7 +395,7 @@ export function UsageStatsPanel({ t }: { t: Translator }): JSX.Element {
     : rebuildArmed ? t('rebuildConfirm') : t('rebuild')
 
   return (
-    <div className={css.panel} data-dsh-usage-panel-plus-glass="panel" ref={panelRef}>
+    <div className={css.panel} data-dsh-usage-panel-plus-glass="panel" aria-busy={loading} ref={panelRef}>
       <div className={css.toolbar}>
         <div className={css.group} data-dsh-usage-panel-plus-glass="group" role="group" aria-label={t('range')}>
           {RANGE_PRESETS.map((r) => (
@@ -495,7 +495,39 @@ export function UsageStatsPanel({ t }: { t: Translator }): JSX.Element {
         </div>
       </div>
 
-      {error && <div className={css.errorBanner}>{error}</div>}
+      {/* The custom preset applies nothing until BOTH dates are set (`load`
+          returns early on an incomplete pair) and the panel keeps showing the
+          previous range meanwhile. Say so on its own line: inside the toolbar
+          the note made the whole row taller and left the action buttons
+          vertically stranded against it. */}
+      {range === 'custom' && (!customFrom || !customTo) && (
+        <div className={css.customHint}>{t('customIncomplete')}</div>
+      )}
+
+      {/* A read is in flight while content is ALREADY on screen: a range
+          switch, a manual refresh, an auto-refresh tick. A thin indeterminate
+          bar says so without blanking the data area — the spinner below is
+          reserved for the first load for exactly that reason. */}
+      {loading && stats !== null && <div className={css.progressBar} role="presentation" />}
+
+      {error && (
+        <div className={css.errorBanner} role="alert">
+          <div className={css.errorBannerRow}>
+            <span className={css.errorBannerText}>{error}</span>
+            {/* Recovery in place: without this the only way out of a failed
+                read was the toolbar's Refresh, which is easy to miss and
+                disabled while the failed request is still settling. */}
+            <Button
+              size="sm"
+              variant="ghost"
+              className={css.errorRetry}
+              onClick={() => { void load({ noCache: true }) }}
+            >
+              {t('retry')}
+            </Button>
+          </div>
+        </div>
+      )}
       {loading && !stats && <div className={css.loading}>{t('loading')}…</div>}
       {/* Content stays mounted across refreshes (stats keeps its last value):
           only the FIRST load shows the spinner, so a range switch or a manual

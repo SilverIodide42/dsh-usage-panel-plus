@@ -248,6 +248,74 @@
   border-radius: var(--usage-radius-frame);
 }
 
+/* In-flight read while content is ALREADY on screen: a range switch, a manual
+   refresh, an auto-refresh tick. The spinner only covers the first load (it
+   would blank the data area on every switch), so without this bar the panel
+   sits on stale numbers with no sign that a request is running — which reads as
+   a frozen UI on a slow host. */
+.progressBar {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  border-radius: var(--usage-radius-bar);
+  background: color-mix(in srgb, var(--dsw-alias-border-l2) 55%, transparent);
+}
+
+.progressBar::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  width: 40%;
+  border-radius: var(--usage-radius-bar);
+  background: var(--dsw-alias-label-primary);
+  animation: usageBarSlide 1.1s var(--ds-ease-in-out) infinite;
+}
+
+@keyframes usageBarSlide {
+  0% {
+    inset-inline-start: -40%;
+  }
+
+  100% {
+    inset-inline-start: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressBar::after {
+    animation: none;
+    inset-inline-start: 30%;
+  }
+}
+
+/* The error banner and its action share one row, so a retry never pushes the
+   message onto a second line. The text block owns the wrapping. */
+.errorBannerRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.errorBannerText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.errorRetry {
+  flex: 0 0 auto;
+  margin-block-start: -2px;
+}
+
+/* The "pick both dates" note is its own line under the toolbar. Inside the
+   toolbar it grew the whole row and left the action buttons vertically
+   stranded against the taller date group. */
+.customHint {
+  margin-block-start: -2px;
+  color: var(--usage-ink-meta);
+  font-size: var(--usage-font-meta);
+}
+
 /* ── numeric cards ─────────────────────────────────────────────────────── */
 
 /* The two long-valued cards bookend the row — total tokens leads it, the top

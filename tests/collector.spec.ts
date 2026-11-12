@@ -868,6 +868,12 @@ describe('UsageCollector auxiliary calls (llm/stream)', () => {
     expect(sample.model).toBe('deepseek/deepseek-flash')
     // The same sample counts the one provider call it reports.
     expect(sample.request).toBe(true)
+    // The hour key is not optional: the "today" / "last 3 days" presets
+    // aggregate HOUR rows, so a title call recorded without one would appear in
+    // the 7/30/all-day views but silently vanish from the hourly ones.
+    expect(typeof sample.hour).toBe('string')
+    expect(String(sample.hour)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}$/)
+    expect(String(sample.hour).slice(0, 10)).toBe(sample.day)
   })
 
   it('leaves every other purpose untouched', async () => {

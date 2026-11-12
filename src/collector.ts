@@ -161,6 +161,13 @@ export class UsageFold {
     return `${data.turn}:${data.step}`
   }
 
+  /** One token bucket as a non-negative finite number. A log that omits a
+   *  bucket or carries a bad value must never inject NaN/Infinity into the
+   *  durable counters (a NaN row can never be repaired by later accumulates). */
+  private static tokens(value: unknown): number {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+  }
+
   /** Fold one event. Returns the sample to persist, or null when the event
    *  carries no (new) usage or turn marker. */
   fold(ev: UsageSessionEvent): UsageSample | null {
@@ -213,26 +220,28 @@ export class UsageFold {
   private replaceSample(ev: UsageSessionEvent, usage: UsageEventData['usage']): UsageSample | null {
     const usage2 = usage
     if (!usage2) return null
-    // A sample with nothing at all is noise; a pure-cache call (zero
-    // uncached input AND zero output but real cache traffic) still counts —
-    // its cacheRead/cacheWrite buckets are real provider-reported tokens.
-    if (
-      (usage2.inputTokens ?? 0)
-      + (usage2.outputTokens ?? 0)
-      + (usage2.cacheReadTokens ?? 0)
-      + (usage2.cacheWriteTokens ?? 0)
-      <= 0
-    ) {
-      return null
-    }
+    // Normalize first, then decide. A sample with nothing at all is noise; a
+    // pure-cache call (zero uncached input AND zero output but real cache
+    // traffic) still counts — its cacheRead/cacheWrite buckets are real
+    // provider-reported tokens. Doing the guard BEFORE normalization would let
+    // a NaN bucket slip past it (`NaN <= 0` is false).
+    const inputTokens = UsageFold.tokens(usage2.inputTokens)
+    const outputTokens = UsageFold.tokens(usage2.outputTokens)
+    const cacheReadTokens = UsageFold.tokens(usage2.cacheReadTokens)
+    const cacheWriteTokens = UsageFold.tokens(usage2.cacheWriteTokens)
+    if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens <= 0) return null
     const key = this.keyOf(ev)
+    // Every bucket is defaulted, not just the cache pair: passing a raw
+    // `undefined` through would make `base.inputTokens + undefined` NaN, and a
+    // NaN row is PERMANENT (every later accumulate stays NaN, the range total
+    // becomes NaN, and JSON.stringify serializes it as null).
     const sample: UsageSample = {
       day: dayKey(ev.time),
       hour: hourKey(ev.time),
-      inputTokens: usage2.inputTokens,
-      outputTokens: usage2.outputTokens,
-      cacheReadTokens: usage2.cacheReadTokens ?? 0,
-      cacheWriteTokens: usage2.cacheWriteTokens ?? 0,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
     }
     if (key === null) {
       // No (turn, step) marker: every emission counts (no dedupe slot). The
@@ -523,6 +532,12 @@ export class UsageCollector {
       const sid = UsageCollector.sessionIdOf(session)
       this.folds.delete(sid)
       this.routes.delete(sid)
+      // Release the boot-scoped "already written to the cursor" entry too, or
+      // every session the host has ever run leaves one string behind for the
+      // lifetime of the process. Only `liveMarked`: `liveMarkBuffer` may still
+      // hold an unflushed boundary, and dropping that would make the next
+      // boot's backfill replay a span the live path already counted.
+      this.liveMarked.delete(sid)
     })
     // Auxiliary model calls that leave no usage in the session log. A session
     // title is generated through this context's `ctx.llm.stream()` with
@@ -552,11 +567,16 @@ export class UsageCollector {
     next: () => AsyncIterable<LlmStreamChunk>,
   ): AsyncIterable<LlmStreamChunk> {
     if (options?.purpose !== 'session-title') return next()
-    // Both are captured when the call STARTS, so a generation running past
-    // midnight is attributed to the day it began.
-    const day = dayKey(Date.now())
+    // Both keys are captured when the call STARTS, so a generation running past
+    // midnight is attributed to the day (and hour) it began. The hour key is
+    // not optional: the "today" / "last 3 days" presets aggregate HOUR rows, so
+    // a title call recorded without one would show up in the 7/30/all-day
+    // views but silently vanish from the hourly ones.
+    const at = Date.now()
+    const day = dayKey(at)
+    const hour = hourKey(at)
     const model = UsageCollector.refOf({ provider: options.provider, model: options.model })
-    return this.recordTitleCall(next(), day, model)
+    return this.recordTitleCall(next(), day, hour, model)
   }
 
   /**
@@ -572,6 +592,7 @@ export class UsageCollector {
   private async *recordTitleCall(
     stream: AsyncIterable<LlmStreamChunk>,
     day: string,
+    hour: string,
     model: string | undefined,
   ): AsyncIterable<LlmStreamChunk> {
     let usage: UsageEventData['usage'] | undefined
@@ -594,6 +615,7 @@ export class UsageCollector {
       // A consumer's failure still propagates; nothing here swallows it.
       void this.store.record({
         day,
+        hour,
         model,
         inputTokens: usage?.inputTokens ?? 0,
         outputTokens: usage?.outputTokens ?? 0,

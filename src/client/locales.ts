@@ -24,6 +24,8 @@ export type UsageStatsKey =
   | 'from'
   | 'to'
   | 'refresh'
+  | 'retry'
+  | 'customIncomplete'
   | 'rebuild'
   | 'rebuildConfirm'
   | 'rebuilding'
@@ -121,6 +123,8 @@ export const en: Record<UsageStatsKey, string> = {
   from: 'From',
   to: 'To',
   refresh: 'Refresh',
+  retry: 'Retry',
+  customIncomplete: 'Pick both dates.',
   rebuild: 'Rebuild',
   rebuildConfirm: 'Rebuild?',
   rebuilding: 'Rebuilding',
@@ -223,6 +227,8 @@ export const zh: Record<UsageStatsKey, string> = {
   from: '开始日期',
   to: '结束日期',
   refresh: '刷新',
+  retry: '重试',
+  customIncomplete: '请选择起止日期',
   rebuild: '重建统计',
   rebuildConfirm: '确认重建？',
   rebuilding: '重建中',
@@ -316,6 +322,8 @@ export const zhTW: Record<UsageStatsKey, string> = {
   from: '開始日期',
   to: '結束日期',
   refresh: '重新整理',
+  retry: '重試',
+  customIncomplete: '請選擇起止日期',
   rebuild: '重建統計',
   rebuildConfirm: '確認重建？',
   rebuilding: '重建中',

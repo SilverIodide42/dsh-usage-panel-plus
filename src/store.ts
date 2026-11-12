@@ -291,15 +291,32 @@ export class UsageStore {
     if (this.importLegacy) await this.importLegacyOnce(domain)
   }
 
+  /** Outcome of the one-time legacy import, for diagnostics and tests.
+   *  Undefined until {@link importLegacyOnce} has run once. */
+  legacyImport?: { days: number; hours: number; skipped: number; failed: number } | 'skipped'
+
   /** One-way, one-time import of the upstream usage domain's day/hour rows and
    *  backfill cursors. Legacy wins on collisions; the current session tables
-   *  and their cursors are never touched. */
+   *  and their cursors are never touched.
+   *
+   *  Rows are validated before they are written: this method runs INSIDE
+   *  initialize(), so a single malformed legacy row that threw would mark the
+   *  whole store degraded and leave the panel permanently empty. Bad rows are
+   *  skipped and counted instead. Writes are chunked because a real legacy
+   *  domain holds hundreds of rows and one awaited write per row made first
+   *  boot noticeably slower. */
   private async importLegacyOnce(domain: UsageDomain): Promise<void> {
     const global = domain.global?.get() as Record<string, unknown> | undefined
-    if (global?.legacyImported === true) return
+    if (global?.legacyImported === true) {
+      this.legacyImport = 'skipped'
+      return
+    }
 
     const file = this.legacyFile
-    if (!existsSync(file)) return
+    if (!existsSync(file)) {
+      this.legacyImport = 'skipped'
+      return
+    }
     let legacy: {
       tables?: { days?: Record<string, unknown>; hours?: Record<string, unknown> }
       global?: Record<string, unknown>
@@ -307,16 +324,51 @@ export class UsageStore {
     try {
       legacy = JSON.parse(readFileSync(file, 'utf8'))
     } catch {
-      return // a corrupt legacy file must never take the host down
+      this.legacyImport = 'skipped' // a corrupt legacy file must never take the host down
+      return
     }
 
-    const days = legacy.tables?.days ?? {}
-    const hours = legacy.tables?.hours ?? {}
-    if (Object.keys(days).length === 0 && Object.keys(hours).length === 0) return
+    const rawDays = legacy.tables?.days ?? {}
+    const rawHours = legacy.tables?.hours ?? {}
+    if (Object.keys(rawDays).length === 0 && Object.keys(rawHours).length === 0) {
+      this.legacyImport = 'skipped'
+      return
+    }
 
-    // Legacy rows overwrite same-key rows; rows that exist only here survive.
-    for (const [key, row] of Object.entries(days)) await this.table?.put(key, row as never)
-    for (const [key, row] of Object.entries(hours)) await this.hourTable?.put(key, row as never)
+    let skipped = 0
+    const dayRows: Array<[string, UsageDayRow]> = []
+    const hourRows: Array<[string, UsageHourRow]> = []
+    for (const [key, raw] of Object.entries(rawDays)) {
+      const parsed = usageDayRowSchema.safeParse(raw)
+      if (parsed.success) dayRows.push([key, parsed.data])
+      else skipped++
+    }
+    for (const [key, raw] of Object.entries(rawHours)) {
+      const parsed = usageHourRowSchema.safeParse(raw)
+      if (parsed.success) hourRows.push([key, parsed.data])
+      else skipped++
+    }
+
+    let failed = 0
+    const writeChunk = async <T>(
+      table: UsageKvTable<string, T> | null,
+      rows: Array<[string, T]>,
+    ): Promise<void> => {
+      if (table === null) return
+      const CHUNK = 50
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        await Promise.all(rows.slice(i, i + CHUNK).map(async ([key, row]) => {
+          try {
+            await table.put(key, row)
+          } catch {
+            failed++ // one unwritable row must not abort the import
+          }
+        }))
+      }
+    }
+    await writeChunk(this.table, dayRows)
+    await writeChunk(this.hourTable, hourRows)
+    this.legacyImport = { days: dayRows.length, hours: hourRows.length, skipped, failed }
 
     const lg = legacy.global ?? {}
     const mergedGlobal: Record<string, unknown> = { ...(global ?? {}) }
@@ -335,6 +387,8 @@ export class UsageStore {
     }
     if (lg.hoursReady === true) mergedGlobal.hoursReady = true
     mergedGlobal.legacyImported = true
+    // If this write fails the marker is absent, so the next boot re-imports:
+    // the import is idempotent (legacy wins), so a retry is harmless.
     await domain.global.set(mergedGlobal)
   }
 
@@ -994,14 +1048,23 @@ function accumulate<T extends UsageCounters>(base: T, sample: UsageSample): T {
   if (sample.turn) {
     return { ...base, turns: base.turns + 1, lastSeen: Math.max(base.lastSeen, at), firstSeen }
   }
+  // Every bucket passes through `bucket()`: a NaN or negative can never enter a
+  // durable row. NaN would be permanent (NaN + x stays NaN) and JSON.stringify
+  // would serialize it as null, corrupting the panel's totals for that row
+  // forever.
   return {
     ...base,
     requests: base.requests + (sample.request ? 1 : 0),
-    inputTokens: base.inputTokens + sample.inputTokens,
-    outputTokens: base.outputTokens + sample.outputTokens,
-    cacheReadTokens: base.cacheReadTokens + sample.cacheReadTokens,
-    cacheWriteTokens: base.cacheWriteTokens + sample.cacheWriteTokens,
+    inputTokens: base.inputTokens + bucket(sample.inputTokens),
+    outputTokens: base.outputTokens + bucket(sample.outputTokens),
+    cacheReadTokens: base.cacheReadTokens + bucket(sample.cacheReadTokens),
+    cacheWriteTokens: base.cacheWriteTokens + bucket(sample.cacheWriteTokens),
     lastSeen: Math.max(base.lastSeen, at),
     firstSeen,
   }
+}
+
+/** A token count as a non-negative finite number; anything else is zero. */
+function bucket(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
