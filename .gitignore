@@ -1,6 +1,11 @@
 node_modules/
-lib/
 dist/
+# `lib/` IS committed on purpose. The package entry (`main`) is lib/index.js and
+# there is no `prepare` script, so a `github:` install has nothing to build from
+# — without the built output in the repository the plugin cannot load at all.
+# Only the source maps are left out: they are dev artifacts, and the release
+# tarball ships the same JavaScript without them.
+lib/**/*.map
 *.log
 .DS_Store
 .vscode/

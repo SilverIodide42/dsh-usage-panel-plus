@@ -19,12 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This repository is a derivative work of dsh-usage-statistics-panel v0.3.4 by
-HaoyueQin (https://github.com/HaoyueQin/dsh-usage-statistics-panel), used under
-the MIT License reproduced above. The original copyright notice is retained as
-required by those terms. The modifications are likewise released under the MIT
-License on the same terms. This project is not affiliated with or endorsed by
-the upstream author. See NOTICE.md for details.

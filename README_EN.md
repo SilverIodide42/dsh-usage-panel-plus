@@ -22,7 +22,7 @@ English | [中文](README.md)
 
 ![License](https://img.shields.io/github/license/SilverIodide42/dsh-usage-panel-plus)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)
-![tests](https://img.shields.io/badge/tests-433%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-442%20passing-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D22-blue)
 ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-4D6BFE)
 
