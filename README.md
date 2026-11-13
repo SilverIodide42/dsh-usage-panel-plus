@@ -28,7 +28,7 @@
 
 | | 本插件 | 上游 0.3.4 |
 |---|---|---|
-| 包名 / 版本 | `dsh-usage-panel-plus@0.1.1` | `dsh-usage-statistics-panel@0.3.4` |
+| 包名 / 版本 | `dsh-usage-panel-plus@0.1.2` | `dsh-usage-statistics-panel@0.3.4` |
 | bundle id | `dsh-external/dsh-usage-panel-plus` | `dsh-external/dsh-usage-statistics-panel` |
 | 路由前缀 | `/usage-panel-plus/api` | `/usage/api` |
 | 存储域 | `usage_panel_plus` | `usage_history` |
@@ -62,10 +62,10 @@ pnpm test          # 构建 + 444 tests / 38 files
 
 ### 安装到本机 DSH
 
-作为独立插件安装（包名 `dsh-usage-panel-plus@0.1.1`，与上游 `dsh-usage-statistics-panel` 不冲突）：
+作为独立插件安装（包名 `dsh-usage-panel-plus@0.1.2`，与上游 `dsh-usage-statistics-panel` 不冲突）：
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.1
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.2
 ```
 
 或从本仓库源码构建后，把产物（`lib/index.js` 宿主半、`lib/client.js` 与
@@ -122,7 +122,7 @@ DSH web 插件的用量统计面板：按天 / 按小时的 Token 趋势、GitHu
 作为独立插件安装（包名 `dsh-usage-panel-plus`，与上游 `dsh-usage-statistics-panel` 不冲突）：
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.1
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.2
 ```
 
 装完**硬刷新浏览器**（Cmd/Ctrl+Shift+R）：client 半的改动 DSH 会热加载，无需重启；仅 host 半（采集/存储/路由）更新时需要重启 DSH。由于包名与版本都独立，市场不会把它当作上游的「升级」，装任一方都不会覆盖另一方。

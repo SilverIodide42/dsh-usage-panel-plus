@@ -17,7 +17,7 @@ v0.3.4 by **HaoyueQin**, licensed under the MIT License.
 - This project is **not affiliated with, endorsed by, or maintained by** the
   upstream author.
 - It is published as a **separate plugin** under its own identity:
-  `dsh-usage-panel-plus@0.1.1`, bundle id
+  `dsh-usage-panel-plus@0.1.2`, bundle id
   `dsh-external/dsh-usage-panel-plus`, route prefix `/usage-panel-plus/api`,
   storage domain `usage_panel_plus`, and panel id `usage-panel-plus`. It is
   **not** a release or an upgrade of the upstream package, does not share the
@@ -40,6 +40,6 @@ On top of the functional enhancements listed in
 renamed so this plugin no longer collides with its upstream: the package name
 and version, plugin/bundle id, cordis fiber id, web route prefix, storage
 domain, locale namespace, panel/slot keys, localStorage keys, CSS attribute
-names and client-bundle registration ids. The `0.1.1` version is this
+names and client-bundle registration ids. The `0.1.2` version is this
 project's own first release, not a continuation of the upstream version
 series.

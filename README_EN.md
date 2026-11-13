@@ -30,7 +30,7 @@ English | [中文](README.md)
 
 | | This plugin | Upstream 0.3.4 |
 |---|---|---|
-| Package / version | `dsh-usage-panel-plus@0.1.1` | `dsh-usage-statistics-panel@0.3.4` |
+| Package / version | `dsh-usage-panel-plus@0.1.2` | `dsh-usage-statistics-panel@0.3.4` |
 | Bundle id | `dsh-external/dsh-usage-panel-plus` | `dsh-external/dsh-usage-statistics-panel` |
 | Route prefix | `/usage-panel-plus/api` | `/usage/api` |
 | Storage domain | `usage_panel_plus` | `usage_history` |
@@ -78,7 +78,7 @@ Install it as its own plugin — the package name is `dsh-usage-panel-plus`, so
 it does not collide with `dsh-usage-statistics-panel`:
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.1
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.2
 ```
 
 Or, from a clone of this repository, drop the built artifacts
@@ -148,7 +148,7 @@ All charts are hand-drawn SVG with no chart library; colours are fixed rank pale
 ## Install
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.1
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.2
 ```
 
 After mounting, **hard-refresh the browser** (Cmd/Ctrl+Shift+R): client-half changes hot-reload in DSH, no restart needed; only host-half updates (collector/storage/routes) require restarting DSH.

@@ -1,6 +1,6 @@
 {
   "name": "dsh-usage-panel-plus",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Standalone DSH web plugin: a usage statistics panel with per-day / per-hour token trend, activity heatmap, cache hit-rate curve, and per-model / per-provider / per-session breakdowns.",
   "icon": "./icon.svg",
   "type": "module",
