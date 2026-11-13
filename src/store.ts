@@ -293,11 +293,19 @@ export class UsageStore {
 
   /** Outcome of the one-time legacy import, for diagnostics and tests.
    *  Undefined until {@link importLegacyOnce} has run once. */
-  legacyImport?: { days: number; hours: number; skipped: number; failed: number } | 'skipped'
+  legacyImport?: { days: number; hours: number; skipped: number; failed: number; conflicts: number } | 'skipped'
 
   /** One-way, one-time import of the upstream usage domain's day/hour rows and
-   *  backfill cursors. Legacy wins on collisions; the current session tables
-   *  and their cursors are never touched.
+   *  backfill cursors. Missing rows are imported; an EXISTING target row is
+   *  never overwritten. The current session tables and their cursors are never
+   *  touched.
+   *
+   *  A same-key collision is not proof that the two rows describe the same
+   *  calls. A late import can meet a target row written from a different time
+   *  span (or one that already contains the legacy history), so neither
+   *  "legacy wins" nor summing is generally correct. Keeping the target row is
+   *  the only non-destructive default; fresh installs have an empty target and
+   *  therefore import every legacy row exactly as before.
    *
    *  Rows are validated before they are written: this method runs INSIDE
    *  initialize(), so a single malformed legacy row that threw would mark the
@@ -350,25 +358,35 @@ export class UsageStore {
     }
 
     let failed = 0
+    let conflicts = 0
     const writeChunk = async <T>(
       table: UsageKvTable<string, T> | null,
       rows: Array<[string, T]>,
-    ): Promise<void> => {
-      if (table === null) return
+    ): Promise<number> => {
+      if (table === null) return 0
+      let written = 0
       const CHUNK = 50
       for (let i = 0; i < rows.length; i += CHUNK) {
         await Promise.all(rows.slice(i, i + CHUNK).map(async ([key, row]) => {
+          // A collision is not a duplicate proof (see the method doc): never
+          // let a late legacy import erase usage the target already recorded.
+          if (table.get(key) !== undefined) {
+            conflicts++
+            return
+          }
           try {
             await table.put(key, row)
+            written++
           } catch {
             failed++ // one unwritable row must not abort the import
           }
         }))
       }
+      return written
     }
-    await writeChunk(this.table, dayRows)
-    await writeChunk(this.hourTable, hourRows)
-    this.legacyImport = { days: dayRows.length, hours: hourRows.length, skipped, failed }
+    const importedDays = await writeChunk(this.table, dayRows)
+    const importedHours = await writeChunk(this.hourTable, hourRows)
+    this.legacyImport = { days: importedDays, hours: importedHours, skipped, failed, conflicts }
 
     const lg = legacy.global ?? {}
     const mergedGlobal: Record<string, unknown> = { ...(global ?? {}) }
@@ -388,7 +406,7 @@ export class UsageStore {
     if (lg.hoursReady === true) mergedGlobal.hoursReady = true
     mergedGlobal.legacyImported = true
     // If this write fails the marker is absent, so the next boot re-imports:
-    // the import is idempotent (legacy wins), so a retry is harmless.
+    // the import is idempotent (missing rows only), so a retry is harmless.
     await domain.global.set(mergedGlobal)
   }
 

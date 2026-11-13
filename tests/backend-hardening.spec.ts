@@ -274,7 +274,7 @@ describe('UsageStore legacy import hardening', () => {
     // The store must NOT be degraded: that is what used to blank the panel.
     expect(store.degradation).toBeUndefined()
 
-    expect(store.legacyImport).toEqual({ days: 1, hours: 1, skipped: 1, failed: 0 })
+    expect(store.legacyImport).toEqual({ days: 1, hours: 1, skipped: 1, failed: 0, conflicts: 0 })
 
     const days = await store.rangeRows('2026-07-01', '2026-09-01')
     expect(days).toHaveLength(1)
@@ -298,13 +298,49 @@ describe('UsageStore legacy import hardening', () => {
     const domain = memoryDomain()
     const first = new UsageStore(domain, { importLegacy: true, legacyFile: file })
     await first.readyPromise()
-    expect(first.legacyImport).toEqual({ days: 1, hours: 0, skipped: 0, failed: 0 })
+    expect(first.legacyImport).toEqual({ days: 1, hours: 0, skipped: 0, failed: 0, conflicts: 0 })
 
     // A second store over the same domain must see the marker and do nothing.
     const second = new UsageStore(domain, { importLegacy: true, legacyFile: file })
     await second.readyPromise()
     expect(second.legacyImport).toBe('skipped')
     expect(await second.rangeRows('2026-08-01', '2026-08-01')).toHaveLength(1)
+  })
+
+  it('keeps an existing target row on a same-key collision', async () => {
+    const file = legacyFile({
+      tables: {
+        days: {
+          '2026-08-01|deepseek|deepseek/deepseek-chat': validDay,
+          '2026-08-02|deepseek|deepseek/deepseek-chat': { ...validDay, day: '2026-08-02', inputTokens: 20 },
+        },
+        hours: {},
+      },
+      global: { backfilledSessions: ['s1'] },
+    })
+
+    const domain = memoryDomain()
+    const raw = await domain.open({ name: 'usage_panel_plus', version: 1, tables: {} })
+    // A cursor marks this as an initialized store, not pre-cursor legacy rows
+    // that the open-time rebuild would clear before the import runs.
+    await raw.global.set({ backfilledSessions: ['s1'] })
+    // Simulate a late import: the target already recorded a DIFFERENT span for
+    // the same day/provider/model. Overwriting it with the legacy row would
+    // silently destroy real usage; summing them could double-count instead.
+    await raw.table('days').put('2026-08-01|deepseek|deepseek/deepseek-chat', {
+      ...validDay,
+      inputTokens: 777,
+    })
+
+    const store = new UsageStore(domain, { importLegacy: true, legacyFile: file })
+    await store.readyPromise()
+    expect(store.degradation).toBeUndefined()
+    expect(store.legacyImport).toEqual({ days: 1, hours: 0, skipped: 0, failed: 0, conflicts: 1 })
+
+    const conflict = (await store.rangeRows('2026-08-01', '2026-08-01'))[0]!
+    expect(conflict.inputTokens).toBe(777) // target value survives verbatim
+    const imported = (await store.rangeRows('2026-08-02', '2026-08-02'))[0]!
+    expect(imported.inputTokens).toBe(20) // a genuinely missing legacy row imports
   })
 
   it('ignores a corrupt legacy file instead of failing to open', async () => {

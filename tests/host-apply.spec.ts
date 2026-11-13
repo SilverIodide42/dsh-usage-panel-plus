@@ -6,8 +6,9 @@
  * down). The store is a process-level singleton; an unavailable domain
  * degrades the STORE instead of failing the load.
  */
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { apply, _resetSharedStoreForTests } from '../src/index.ts'
+import { UsageCollector } from '../src/collector.ts'
 
 function fakeCtx(openImpl: () => Promise<unknown> ): { ctx: unknown; opens: () => number } {
   let opens = 0
@@ -197,5 +198,82 @@ describe('/reset rebuild pipeline (host half)', () => {
     expect(JSON.parse(a.body).ok).toBe(true)
     expect(JSON.parse(b.body).ok).toBe(true)
     expect(listCalls()).toBe(2) // exactly one rebuild pass ran
+  })
+})
+
+// ── boot-time incremental history passes ──────────────────────────────────
+describe('apply(): ready markers do not suppress later incremental backfills', () => {
+  beforeEach(() => {
+    _resetSharedStoreForTests()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('still checks unseen hour/session history when both ready flags are true', async () => {
+    // Regression: a session first attached AFTER the one-time upgrade carried
+    // a live boundary but no seen marker. Returning early on *Ready left its
+    // whole pre-attach history stranded forever.
+    const dayRow = {
+      day: '2026-08-01', provider: 'deepseek', model: 'deepseek/deepseek-chat',
+      inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0,
+      requests: 1, turns: 0, lastSeen: 1,
+    }
+    const table = (rows: Map<string, unknown>) => ({
+      get: (k: string) => rows.get(k),
+      entries: () => rows.entries(),
+      keys: () => rows.keys(),
+      size: rows.size,
+      put: async (k: string, v: unknown) => { rows.set(k, v) },
+      delete: async (k: string) => rows.delete(k),
+      update: async (k: string, fn: (cur: unknown) => unknown) => {
+        const next = fn(rows.get(k))
+        rows.set(k, next)
+        return next
+      },
+    })
+    const tables = {
+      days: new Map<string, unknown>([['2026-08-01|deepseek|deepseek/deepseek-chat', dayRow]]),
+      hours: new Map<string, unknown>(),
+      sessions: new Map<string, unknown>(),
+      session_meta: new Map<string, unknown>(),
+    }
+    let global: unknown = {
+      backfilledSessions: ['old-session'],
+      liveFirstSeq: {},
+      hoursBackfilledSessions: ['old-session'],
+      hoursLiveFirstSeq: {},
+      hoursReady: true,
+      sessionsBackfilledSessions: ['old-session'],
+      sessionsLiveFirstSeq: {},
+      sessionsReady: true,
+      sessionsCoverage: 2,
+    }
+    const domain = {
+      table: (name: keyof typeof tables) => table(tables[name]),
+      global: { get: () => global, set: async (value: unknown) => { global = value } },
+    }
+
+    const all = vi.spyOn(UsageCollector.prototype, 'backfill').mockResolvedValue(undefined)
+    const hours = vi.spyOn(UsageCollector.prototype, 'backfillHours').mockResolvedValue(undefined)
+    const sessions = vi.spyOn(UsageCollector.prototype, 'backfillSessions').mockResolvedValue(undefined)
+    const ctx = {
+      effect: (fn: () => () => void) => { fn() },
+      on: () => {},
+      get: () => undefined,
+      webServer: { register: () => () => {} },
+      sessionPersistence: { list: async () => [], inspect: async () => ({ meta: {}, events: [] }) },
+      sessions: { list: () => [], get: () => undefined },
+      storageDomain: { open: async () => domain },
+    }
+
+    apply(ctx as never)
+    for (let i = 0; i < 100 && (hours.mock.calls.length === 0 || sessions.mock.calls.length === 0); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+
+    expect(all).toHaveBeenCalledTimes(1)
+    expect(hours).toHaveBeenCalledTimes(1)
+    expect(sessions).toHaveBeenCalledTimes(1)
   })
 })

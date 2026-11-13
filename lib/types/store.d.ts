@@ -189,10 +189,19 @@ export declare class UsageStore {
         hours: number;
         skipped: number;
         failed: number;
+        conflicts: number;
     } | 'skipped';
     /** One-way, one-time import of the upstream usage domain's day/hour rows and
-     *  backfill cursors. Legacy wins on collisions; the current session tables
-     *  and their cursors are never touched.
+     *  backfill cursors. Missing rows are imported; an EXISTING target row is
+     *  never overwritten. The current session tables and their cursors are never
+     *  touched.
+     *
+     *  A same-key collision is not proof that the two rows describe the same
+     *  calls. A late import can meet a target row written from a different time
+     *  span (or one that already contains the legacy history), so neither
+     *  "legacy wins" nor summing is generally correct. Keeping the target row is
+     *  the only non-destructive default; fresh installs have an empty target and
+     *  therefore import every legacy row exactly as before.
      *
      *  Rows are validated before they are written: this method runs INSIDE
      *  initialize(), so a single malformed legacy row that threw would mark the

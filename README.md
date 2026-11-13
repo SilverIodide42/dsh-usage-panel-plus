@@ -20,7 +20,7 @@
 
 ![License](https://img.shields.io/github/license/SilverIodide42/dsh-usage-panel-plus)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)
-![tests](https://img.shields.io/badge/tests-442%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-444%20passing-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D22-blue)
 ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-4D6BFE)
 
@@ -28,7 +28,7 @@
 
 | | 本插件 | 上游 0.3.4 |
 |---|---|---|
-| 包名 / 版本 | `dsh-usage-panel-plus@0.1.0` | `dsh-usage-statistics-panel@0.3.4` |
+| 包名 / 版本 | `dsh-usage-panel-plus@0.1.1` | `dsh-usage-statistics-panel@0.3.4` |
 | bundle id | `dsh-external/dsh-usage-panel-plus` | `dsh-external/dsh-usage-statistics-panel` |
 | 路由前缀 | `/usage-panel-plus/api` | `/usage/api` |
 | 存储域 | `usage_panel_plus` | `usage_history` |
@@ -57,20 +57,20 @@
 ```bash
 pnpm install --frozen-lockfile
 pnpm typecheck     # tsc --noEmit，0 error（strict + noUncheckedIndexedAccess）
-pnpm test          # 构建 + 433 tests / 37 files
+pnpm test          # 构建 + 444 tests / 38 files
 ```
 
 ### 安装到本机 DSH
 
-作为独立插件安装（包名 `dsh-usage-panel-plus@0.1.0`，与上游 `dsh-usage-statistics-panel` 不冲突）：
+作为独立插件安装（包名 `dsh-usage-panel-plus@0.1.1`，与上游 `dsh-usage-statistics-panel` 不冲突）：
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.0
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.1
 ```
 
 或从本仓库源码构建后，把产物（`lib/index.js` 宿主半、`lib/client.js` 与
-`lib/client-registry.js` 客户端半）放进 DSH profile 的
-`node_modules/dsh-usage-panel-plus` 目录：**宿主半改动需重启 DSH**，客户端半刷新页面即可。
+`lib/client-registry.js` 客户端半）放进 DSH profile 下的
+`node_modules\dsh-usage-panel-plus` 目录：**宿主半改动需重启 DSH**，客户端半刷新页面即可。
 
 因为包名与版本都独立，市场不会把它当作上游的「升级」，装任一方都不会覆盖另一方。
 
@@ -122,7 +122,7 @@ DSH web 插件的用量统计面板：按天 / 按小时的 Token 趋势、GitHu
 作为独立插件安装（包名 `dsh-usage-panel-plus`，与上游 `dsh-usage-statistics-panel` 不冲突）：
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.0
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.1
 ```
 
 装完**硬刷新浏览器**（Cmd/Ctrl+Shift+R）：client 半的改动 DSH 会热加载，无需重启；仅 host 半（采集/存储/路由）更新时需要重启 DSH。由于包名与版本都独立，市场不会把它当作上游的「升级」，装任一方都不会覆盖另一方。

@@ -172,15 +172,14 @@ export function apply(ctx: Context, config: UsageStatsConfig = {}): void {
   // domain.
   //
   // The hour table arrived after the day cursors were populated, so an
-  // existing install has day rows but no hour history. Once the day
-  // backfill settles, replay the logs into the hour table ONCE — only when
-  // the day pass was clean (an errored pass retries next boot instead of
-  // letting the hour pass claim sessions the day pass may still rewrite) and
-  // only for an existing store (a fresh install's `all` pass already
-  // double-wrote and marked the hour history complete).
+  // existing install has day rows but no hour history. After every clean day
+  // pass, replay any logs the hour cursor has NOT seen. `hoursReady` must not
+  // short-circuit this check: a session first attached to the live listener
+  // after that flag was set still has a pre-attach prefix to recover. Seen
+  // sessions are skipped by the collector, so an already-covered boot is a
+  // cheap list-and-return rather than a second replay.
   const ensureHourHistory = async (): Promise<void> => {
     await store.readyPromise()
-    if (await store.hoursReady()) return
     if (!(await store.hasAnyDayRows())) return
     if (collector.status.error !== undefined) return
     // The upgrade boundary: a session still open right now must replay its
@@ -205,21 +204,17 @@ export function apply(ctx: Context, config: UsageStatsConfig = {}): void {
   }
 
   // The session table arrived last: an existing install has day/hour rows but
-  // no conversation dimension, so replay every log into the session table
-  // ONCE. Same safety rules as the hour upgrade — only after a clean day
-  // pass, only for an existing store, with the live boundary sampled at the
-  // moment of the upgrade so the running live path keeps its own span.
-  //
-  // The coverage marker makes the pass self-healing: a store written under
-  // older coverage rules (or one whose session cursor was advanced by a
-  // partial pass) is rebuilt from scratch once — rows and cursors wiped, then
-  // every persisted log replayed in full.
+  // no conversation dimension. After every clean day pass, replay any logs
+  // the session cursor has NOT seen. `sessionsReady` is deliberately not an
+  // early return: a session attached after that flag was set can have a
+  // boundary but no seen marker, and skipping here used to strand its whole
+  // pre-attach history forever. The coverage-version rebuild remains a
+  // one-time reset; ordinary boots only replay unseen sessions.
   const ensureSessionHistory = async (): Promise<void> => {
     await store.readyPromise()
     if (!(await store.hasAnyDayRows())) return
     if (collector.status.error !== undefined) return
     const coverage = await store.sessionsCoverage()
-    if (coverage >= SESSION_COVERAGE_VERSION && (await store.sessionsReady())) return
     if (coverage < SESSION_COVERAGE_VERSION) await store.resetSessionsForRebuild()
     const previous = await store.sessionsLiveSequences()
     const boundaries = new Map<string, number>()

@@ -22,7 +22,7 @@ English | [中文](README.md)
 
 ![License](https://img.shields.io/github/license/SilverIodide42/dsh-usage-panel-plus)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)
-![tests](https://img.shields.io/badge/tests-442%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-444%20passing-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D22-blue)
 ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-4D6BFE)
 
@@ -30,7 +30,7 @@ English | [中文](README.md)
 
 | | This plugin | Upstream 0.3.4 |
 |---|---|---|
-| Package / version | `dsh-usage-panel-plus@0.1.0` | `dsh-usage-statistics-panel@0.3.4` |
+| Package / version | `dsh-usage-panel-plus@0.1.1` | `dsh-usage-statistics-panel@0.3.4` |
 | Bundle id | `dsh-external/dsh-usage-panel-plus` | `dsh-external/dsh-usage-statistics-panel` |
 | Route prefix | `/usage-panel-plus/api` | `/usage/api` |
 | Storage domain | `usage_panel_plus` | `usage_history` |
@@ -69,7 +69,7 @@ Requires **Node ≥ 22** (`tsdown` needs `Promise.withResolvers`).
 ```bash
 pnpm install --frozen-lockfile
 pnpm typecheck     # tsc --noEmit, 0 errors (strict + noUncheckedIndexedAccess)
-pnpm test          # build + 433 tests / 37 files
+pnpm test          # build + 444 tests / 38 files
 ```
 
 ### Installing into a local DSH
@@ -78,7 +78,7 @@ Install it as its own plugin — the package name is `dsh-usage-panel-plus`, so
 it does not collide with `dsh-usage-statistics-panel`:
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.0
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.1
 ```
 
 Or, from a clone of this repository, drop the built artifacts
@@ -148,7 +148,7 @@ All charts are hand-drawn SVG with no chart library; colours are fixed rank pale
 ## Install
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.0
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.1
 ```
 
 After mounting, **hard-refresh the browser** (Cmd/Ctrl+Shift+R): client-half changes hot-reload in DSH, no restart needed; only host-half updates (collector/storage/routes) require restarting DSH.
