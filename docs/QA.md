@@ -10,7 +10,7 @@
 - 被测 GUI：本地 DSH Web GUI（验收期间持续有效）
 - 源码工作树：本仓库（发布前位于本地构建工作区）
 - 交付工具与独立对账工具：`tools/dsh-usage-panel-plus`、`tools/usage-panel-verify`（本机维护工具，未随本仓库发布）
-- 已装包：本机 DSH desktop profile 的 `node_modules/dsh-usage-statistics-panel`（76 文件）
+- 已装包：本机 DSH desktop profile 的 node_modules 内 `dsh-usage-statistics-panel`（76 文件）
 - 验收方式：只读检查 + 沙盘（不触碰真 profile）+ 真实 API 探针 + 独立日志重算
 - 验收期间**未**调用 `/usage/api/reset`，未改动真 profile
 
@@ -154,7 +154,7 @@ sessions     : failing=2  onlyPanel=6  onlyOracle=0
 
 | 目的 | 命令 / 文件 |
 |---|---|
-| 全量测试 | `node node_modules/vitest/vitest.mjs run`（工作树内，Node 24） |
+| 全量测试 | 构建工作树内跑全量 vitest（Node 24；入口是该工作树 node_modules 下的 vitest.mjs） |
 | 类型检查 | `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit` |
 | 重建 | `node node_modules/typescript/bin/tsc -p tsconfig.build.json && node node_modules/tsdown/dist/run.mjs` |
 | 交付自检 | `powershell.exe -ExecutionPolicy Bypass -File tools/dsh-usage-panel-plus/verify.ps1 -Url $env:DSH_WEB_URL` |

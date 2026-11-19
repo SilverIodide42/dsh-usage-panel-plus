@@ -48,6 +48,14 @@ export interface CollectorOptions {
     source?: string;
     /** Backfill concurrency (default 4, matching session-query-sqlite). */
     backfillConcurrency?: number;
+    /** Session-log root. Defaults to `$DSH_HOME/sessions` (or ~/.dsh/sessions). */
+    sessionsRoot?: string;
+    /** A session whose log changed more recently than this is treated as STILL
+     *  BEING WRITTEN by another DSH process and is deferred to a later pass.
+     *  The storage backend has no cross-process lock, so several profiles cannot
+     *  share the domain; one instance instead folds the others' sessions once
+     *  their logs go quiet. Default 120 s. */
+    quietMs?: number;
 }
 export interface CollectorStatus {
     running: boolean;
@@ -56,6 +64,9 @@ export interface CollectorStatus {
     scannedSessions: number;
     lastSessionId?: string;
     error?: string;
+    /** Targets deferred because their log was still changing (another process
+     *  is writing it). Picked up by a later catch-up pass. */
+    pendingSessions: number;
     /** Store operations this generation refused (degraded domain, write
      *  failure, ...): live samples AND durable cursor writes. Recording is
      *  observational and must never take the host down, so failures are
@@ -111,6 +122,9 @@ export declare class UsageCollector {
     private store;
     private options;
     readonly status: CollectorStatus;
+    /** session id -> log mtime (epoch ms), rebuilt once per backfill pass. Only
+     *  consulted for sessions this process is NOT live-attached to. */
+    private logMtimes;
     /** One fold bucket per live session id: (turn, step) dedupe keys are
      *  session-scoped, so concurrent sessions never collide. */
     private folds;
@@ -140,6 +154,21 @@ export declare class UsageCollector {
      *  "(unknown)". */
     private routeFor;
     private foldFor;
+    /** The session-log root this collector scans for quiescence checks and for
+     *  the catch-up pass. `DSH_HOME` is the host's own data directory, so this
+     *  stays correct when the operator moves it. */
+    private sessionsRoot;
+    /** Index every persisted session log's mtime once per pass.
+     *
+     *  Layout is `<root>/<workspace-key>/<session-id>/session.v4.jsonl.zstd`.
+     *  Two levels of readdir plus a stat per session is cheap next to decoding a
+     *  log, and it lets this process tell "another DSH instance is still writing
+     *  this session" from "this log is complete". */
+    private refreshLogMtimes;
+    /** True when another DSH process is plausibly still appending to this
+     *  session's log. An unmeasured log is NOT deferred: unknown means "fold it",
+     *  which matches a single-instance install and keeps first-boot behaviour. */
+    private logStillGrowing;
     /** Write a live session into the durable backfill cursor (coalesced per
      *  tick) together with the seq of its FIRST observed event. This is the
      *  restart-safety invariant, upgraded: `SessionStore.list()` only reports

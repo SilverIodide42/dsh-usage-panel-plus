@@ -30,6 +30,12 @@ export interface UsageStatsConfig {
   source?: string
   /** Backfill concurrency (default 4). */
   backfillConcurrency?: number
+  /** How long a session log must stay untouched before another DSH process'
+   *  session is folded (default 120 s). Below this the file may still be
+   *  mid-append and folding it would strand the rest of that session. */
+  quietMs?: number
+  /** Catch-up scan interval in ms (default 5 min, 0 disables the tick). */
+  catchUpIntervalMs?: number
 }
 
 /**
@@ -76,6 +82,7 @@ export function apply(ctx: Context, config: UsageStatsConfig = {}): void {
   const collector = new UsageCollector(ctx, store, {
     source: config.source,
     backfillConcurrency: config.backfillConcurrency,
+    quietMs: config.quietMs,
   })
 
   // The /usage-panel-plus/api trust inputs, resolved live so the fence reads the same sources
@@ -234,14 +241,39 @@ export function apply(ctx: Context, config: UsageStatsConfig = {}): void {
     await collector.backfillSessions(ctx.sessionPersistence, ctx.sessions, controller.signal)
   }
 
+  // One boot pass, then a slow tick. Without the tick, a session created after
+  // this process started — a `headless`/`web` profile run, a CLI session, or a
+  // second DSH instance — stays invisible until the next restart, which is
+  // exactly the traffic the panel used to be missing. Multiple profiles cannot
+  // share the domain (the storage backend has no cross-process lock and
+  // rewrites the whole document per writer), so ONE instance folds the others'
+  // sessions from their logs once those logs go quiet.
+  const runHistoryCycle = async (): Promise<void> => {
+    await rescan()
+    await ensureHourHistory()
+    await ensureSessionHistory()
+  }
+  const CATCH_UP_MS_DEFAULT = 5 * 60_000
+  const catchUpMs = config.catchUpIntervalMs ?? CATCH_UP_MS_DEFAULT
+  let catchingUp = false
+  const catchUp = async (): Promise<void> => {
+    if (catchingUp || collector.running || isRebuilding()) return
+    catchingUp = true
+    try {
+      await runHistoryCycle()
+    } catch {
+      // Best-effort: a failed tick must not kill the timer; the next one retries.
+    } finally {
+      catchingUp = false
+    }
+  }
+
   ctx.effect(() => {
     collector.start()
-    void (async () => {
-      await rescan()
-      await ensureHourHistory()
-      await ensureSessionHistory()
-    })()
+    void runHistoryCycle()
+    const timer = catchUpMs > 0 ? setInterval(() => { void catchUp() }, catchUpMs) : null
     return () => {
+      if (timer !== null) clearInterval(timer)
       scanController?.abort()
     }
   }, 'dsh-usage-panel-plus: collector')

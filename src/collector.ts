@@ -45,6 +45,9 @@ import type { UsageSessionEvent, UsageSessionHeader, UsageSessionPersistence, Us
 import type { UsageStore } from './store.ts'
 import type { UsageSample } from './query.ts'
 import { dayKey, hourKey } from './query.ts'
+import { readdirSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 /** A usage-bearing event shape we extract from the session log. */
 interface UsageEventData {
@@ -119,6 +122,14 @@ export interface CollectorOptions {
   source?: string
   /** Backfill concurrency (default 4, matching session-query-sqlite). */
   backfillConcurrency?: number
+  /** Session-log root. Defaults to `$DSH_HOME/sessions` (or ~/.dsh/sessions). */
+  sessionsRoot?: string
+  /** A session whose log changed more recently than this is treated as STILL
+   *  BEING WRITTEN by another DSH process and is deferred to a later pass.
+   *  The storage backend has no cross-process lock, so several profiles cannot
+   *  share the domain; one instance instead folds the others' sessions once
+   *  their logs go quiet. Default 120 s. */
+  quietMs?: number
 }
 
 export interface CollectorStatus {
@@ -128,6 +139,9 @@ export interface CollectorStatus {
   scannedSessions: number
   lastSessionId?: string
   error?: string
+  /** Targets deferred because their log was still changing (another process
+   *  is writing it). Picked up by a later catch-up pass. */
+  pendingSessions: number
   /** Store operations this generation refused (degraded domain, write
    *  failure, ...): live samples AND durable cursor writes. Recording is
    *  observational and must never take the host down, so failures are
@@ -331,8 +345,12 @@ export class UsageCollector {
     scannedSessions: 0,
     lastSessionId: undefined,
     error: undefined,
+    pendingSessions: 0,
     recordFailures: 0,
   }
+  /** session id -> log mtime (epoch ms), rebuilt once per backfill pass. Only
+   *  consulted for sessions this process is NOT live-attached to. */
+  private logMtimes = new Map<string, number>()
   /** One fold bucket per live session id: (turn, step) dedupe keys are
    *  session-scoped, so concurrent sessions never collide. */
   private folds = new Map<string, UsageFold>()
@@ -394,6 +412,61 @@ export class UsageCollector {
       this.folds.set(sessionId, fold)
     }
     return fold
+  }
+
+  /** The session-log root this collector scans for quiescence checks and for
+   *  the catch-up pass. `DSH_HOME` is the host's own data directory, so this
+   *  stays correct when the operator moves it. */
+  private sessionsRoot(): string {
+    const explicit = this.options.sessionsRoot
+    if (explicit !== undefined && explicit !== '') return explicit
+    const home = process.env.DSH_HOME
+    const base = home !== undefined && home !== '' ? home : join(homedir(), '.dsh')
+    return join(base, 'sessions')
+  }
+
+  /** Index every persisted session log's mtime once per pass.
+   *
+   *  Layout is `<root>/<workspace-key>/<session-id>/session.v4.jsonl.zstd`.
+   *  Two levels of readdir plus a stat per session is cheap next to decoding a
+   *  log, and it lets this process tell "another DSH instance is still writing
+   *  this session" from "this log is complete". */
+  private refreshLogMtimes(): void {
+    const root = this.sessionsRoot()
+    const next = new Map<string, number>()
+    let workspaces: string[]
+    try {
+      workspaces = readdirSync(root)
+    } catch {
+      this.logMtimes = next // no sessions directory: every log counts as quiet
+      return
+    }
+    for (const workspace of workspaces) {
+      let ids: string[]
+      try {
+        ids = readdirSync(join(root, workspace))
+      } catch {
+        continue
+      }
+      for (const id of ids) {
+        try {
+          const stat = statSync(join(root, workspace, id, 'session.v4.jsonl.zstd'))
+          next.set(id, stat.mtimeMs)
+        } catch {
+          // No log for this id (or it is not readable): treat as quiet.
+        }
+      }
+    }
+    this.logMtimes = next
+  }
+
+  /** True when another DSH process is plausibly still appending to this
+   *  session's log. An unmeasured log is NOT deferred: unknown means "fold it",
+   *  which matches a single-instance install and keeps first-boot behaviour. */
+  private logStillGrowing(sessionId: string): boolean {
+    const mtime = this.logMtimes.get(sessionId)
+    if (mtime === undefined) return false
+    return Date.now() - mtime < (this.options.quietMs ?? 120_000)
   }
 
   /** Write a live session into the durable backfill cursor (coalesced per
@@ -686,6 +759,12 @@ export class UsageCollector {
     if (signal?.aborted) return
     this.status.running = true
     this.status.error = undefined
+    this.status.pendingSessions = 0
+    // One stat pass, reused by every worker in this scan. Sessions whose log
+    // changed within `quietMs` belong to another DSH process that is still
+    // writing them; folding a half-written log would mark it seen and strand
+    // the rest, so they are deferred to a later pass instead.
+    this.refreshLogMtimes()
     try {
       // Dual-path list: alpha (0.1.3+, incl. 0.1.5-alpha.1) exposes open()
       // and takes { signal }; rc.1 takes a bare signal and returns header
@@ -789,6 +868,17 @@ export class UsageCollector {
           const isLiveNow = sessions.list().some((s) => s.id === header.id)
           const liveOwnedWhole = isLiveNow && (boundary === undefined || boundary < 0)
           if (liveOwnedWhole) {
+            this.status.done++
+            continue
+          }
+          // Cross-process quiescence: a session THIS process is not attached to
+          // can still be running in another DSH profile (headless / web / CLI).
+          // Replaying a half-written log would mark it seen and strand every
+          // later event, so defer it — the next catch-up pass picks it up once
+          // the file stops growing. Live sessions here are exempt: their prefix
+          // replay is already bounded by the live cursor.
+          if (!isLiveNow && this.logStillGrowing(header.id)) {
+            this.status.pendingSessions++
             this.status.done++
             continue
           }

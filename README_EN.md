@@ -22,7 +22,7 @@ English | [中文](README.md)
 
 ![License](https://img.shields.io/github/license/SilverIodide42/dsh-usage-panel-plus)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)
-![tests](https://img.shields.io/badge/tests-444%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-450%20passing-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D22-blue)
 ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-4D6BFE)
 
@@ -30,7 +30,7 @@ English | [中文](README.md)
 
 | | This plugin | Upstream 0.3.4 |
 |---|---|---|
-| Package / version | `dsh-usage-panel-plus@0.1.2` | `dsh-usage-statistics-panel@0.3.4` |
+| Package / version | `dsh-usage-panel-plus@0.1.3` | `dsh-usage-statistics-panel@0.3.4` |
 | Bundle id | `dsh-external/dsh-usage-panel-plus` | `dsh-external/dsh-usage-statistics-panel` |
 | Route prefix | `/usage-panel-plus/api` | `/usage/api` |
 | Storage domain | `usage_panel_plus` | `usage_history` |
@@ -69,7 +69,7 @@ Requires **Node ≥ 22** (`tsdown` needs `Promise.withResolvers`).
 ```bash
 pnpm install --frozen-lockfile
 pnpm typecheck     # tsc --noEmit, 0 errors (strict + noUncheckedIndexedAccess)
-pnpm test          # build + 444 tests / 38 files
+pnpm test          # build + 450 tests / 39 files
 ```
 
 ### Installing into a local DSH
@@ -78,7 +78,7 @@ Install it as its own plugin — the package name is `dsh-usage-panel-plus`, so
 it does not collide with `dsh-usage-statistics-panel`:
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.2
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.3
 ```
 
 Or, from a clone of this repository, drop the built artifacts
@@ -143,12 +143,13 @@ All charts are hand-drawn SVG with no chart library; colours are fixed rank pale
 
 - **Bottom-bar enhancements**: three switches at the bottom of the panel, all in the same framed style and applied instantly — "Precise cache hit rate" (two decimals, e.g. 85.25%), "Session token breakdown" (total, input, cached input, uncached input and output in place of the default input/output pair), and "Streaming throughput" (the speed reading refreshes to a live estimate on every stream delta and hands back to the session's exact figure once the step settles; the estimate starts from DeepSeek's published character density and is calibrated against the chars-per-token ratio measured from the session's own settled steps, and the live rate counts only the token growth actually observed inside the last 2 s and smooths it, so neither a backlog the UI delivered late nor one noisy frame moves the display, and a step that goes quiet holds its last reading instead of dropping back to the session average)
 - **History backfill**: on first enable, the plugin enumerates and replays existing session logs; for a live session the collector attached to mid-flight, its pre-attachment history is recovered on the next boot by replaying the log prefix below the recorded seq boundary, so historical usage is accounted from day one as faithfully as the logs allow
+- **Incremental catch-up**: every 5 minutes the collector rescans existing sessions, folding ones that appeared *after* this process started — another profile, a CLI run, or a second instance — without waiting for a restart. Logs another process is still appending to are deferred until they have been quiet for 2 minutes, so a half-written log can never strand the events that follow it
 - **Local persistence**: data lands in `$DSH_HOME/storages/usage_panel_plus.json` (storage-domain), fully local, no external services
 
 ## Install
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.2
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.3
 ```
 
 After mounting, **hard-refresh the browser** (Cmd/Ctrl+Shift+R): client-half changes hot-reload in DSH, no restart needed; only host-half updates (collector/storage/routes) require restarting DSH.

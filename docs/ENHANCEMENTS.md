@@ -51,6 +51,22 @@ overwrite the upstream panel's data.
   discloses it.
 - **Per-model cache accounting.** `ModelTokenUsage` gains optional
   `cacheHit` / `cacheMiss`, folded per model in `aggregateSamples()`.
+- **Incremental catch-up (`0.1.3`).** Boot does one history pass, then a
+  5-minute tick re-runs it (`catchUpIntervalMs`, `0` disables the tick). Before
+  that, a session created *after* the process started — a `headless` / `web`
+  profile run, a CLI session, a second DSH instance — stayed invisible until
+  the next restart, which is the traffic the panel used to miss. The storage
+  backend documents a single writer per process and last-write-wins across
+  processes (`@deepseek-ai/dsh-storage-json`), with no cross-process lock, so
+  several profiles cannot share the domain: one instance folds the others'
+  sessions from their logs instead.
+- **Cross-process quiescence gate.** A session this process is not attached to
+  is deferred while its log changed within `quietMs` (default 120 s): folding a
+  half-written log would mark the session seen and strand every later event.
+  Sessions live in this process are exempt — their replay is already bounded by
+  the live cursor. The pass reports `pendingSessions` and `recordFailures` on
+  `POST /usage-panel-plus/api/status`; an unmeasurable log is treated as quiet,
+  so a single-instance install behaves exactly as before.
 
 ## API (`POST /usage-panel-plus/api/range`)
 
@@ -110,13 +126,23 @@ ordering, and a 366-day cap.
 ## Known design boundaries (not bugs)
 
 1. **A session that is live at boot is skipped by the rescan** when no reliable
-   seq boundary exists. It is deliberately **not** marked seen, so the next
-   restart replays it from scratch and the gap self-heals.
-2. **The session dimension only covers conversations whose logs still exist.**
+   seq boundary exists. It is deliberately **not** marked seen, so a later pass
+   replays it from scratch and the gap self-heals — no restart needed since the
+   catch-up tick exists.
+2. **The catch-up tick only reaches sessions whose logs persist.** A call the
+   provider billed that never produced a session event (a request aborted before
+   any usage frame, a title call made while the plugin was not running) is
+   invisible to the collector, as is traffic that bypasses DSH entirely. The
+   panel is a meter of *this host's DSH usage*, not of the provider account.
+3. **Only one DSH process may own the store.** The storage backend has no
+   cross-process lock, so a second instrumented profile would overwrite this
+   one's document; that is why the design folds other processes' sessions from
+   their logs instead of instrumenting every profile.
+4. **The session dimension only covers conversations whose logs still exist.**
    `sessionCount` is therefore systematically lower than the true historical
    session count. Tokens from deleted sessions still count in day/hour totals
    but cannot be attributed to a conversation. The UI discloses this.
-3. **The trend chart caps its visible window at 180 days.** Beyond that the
+5. **The trend chart caps its visible window at 180 days.** Beyond that the
    chart shows the latest 180 days with an explicit note, while the cards and
    lists still cover the full selected range.
 
@@ -125,7 +151,7 @@ ordering, and a 366-day cap.
 - `pnpm install --frozen-lockfile` (with `unrun` pinned as a devDependency;
   `prepare` was removed so an install does not trigger a build on Node 20)
 - `pnpm typecheck` → 0 errors (`strict` + `noUncheckedIndexedAccess`)
-- `pnpm test` → 433 tests / 37 files
+- `pnpm test` → 450 tests / 39 files
 - Build reproduces `lib/index.js`, `lib/client.js`, `lib/client-registry.js`
 - Live API probes across all presets; independent store-vs-API reconciliation
   reports zero difference on totals, models, and daily buckets

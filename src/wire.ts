@@ -164,6 +164,11 @@ export interface BackfillStatus {
   scannedSessions: number
   lastSessionId?: string
   error?: string
+  /** Sessions deferred because another DSH process is still writing their log;
+   *  a later catch-up pass folds them. */
+  pendingSessions?: number
+  /** Durable writes this generation refused (degraded domain, I/O failure). */
+  recordFailures?: number
 }
 
 // ── HTTP helpers (host half only) ─────────────────────────────────────────

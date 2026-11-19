@@ -22,6 +22,12 @@ export interface UsageStatsConfig {
     source?: string;
     /** Backfill concurrency (default 4). */
     backfillConcurrency?: number;
+    /** How long a session log must stay untouched before another DSH process'
+     *  session is folded (default 120 s). Below this the file may still be
+     *  mid-append and folding it would strand the rest of that session. */
+    quietMs?: number;
+    /** Catch-up scan interval in ms (default 5 min, 0 disables the tick). */
+    catchUpIntervalMs?: number;
 }
 /** Reset the process-level store cache (test seam only). */
 export declare function _resetSharedStoreForTests(): void;

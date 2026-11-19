@@ -20,7 +20,7 @@
 
 ![License](https://img.shields.io/github/license/SilverIodide42/dsh-usage-panel-plus)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)
-![tests](https://img.shields.io/badge/tests-444%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-450%20passing-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D22-blue)
 ![dsh-plugin](https://img.shields.io/badge/dsh-plugin-4D6BFE)
 
@@ -28,7 +28,7 @@
 
 | | 本插件 | 上游 0.3.4 |
 |---|---|---|
-| 包名 / 版本 | `dsh-usage-panel-plus@0.1.2` | `dsh-usage-statistics-panel@0.3.4` |
+| 包名 / 版本 | `dsh-usage-panel-plus@0.1.3` | `dsh-usage-statistics-panel@0.3.4` |
 | bundle id | `dsh-external/dsh-usage-panel-plus` | `dsh-external/dsh-usage-statistics-panel` |
 | 路由前缀 | `/usage-panel-plus/api` | `/usage/api` |
 | 存储域 | `usage_panel_plus` | `usage_history` |
@@ -57,15 +57,15 @@
 ```bash
 pnpm install --frozen-lockfile
 pnpm typecheck     # tsc --noEmit，0 error（strict + noUncheckedIndexedAccess）
-pnpm test          # 构建 + 444 tests / 38 files
+pnpm test          # 构建 + 450 tests / 39 files
 ```
 
 ### 安装到本机 DSH
 
-作为独立插件安装（包名 `dsh-usage-panel-plus@0.1.2`，与上游 `dsh-usage-statistics-panel` 不冲突）：
+作为独立插件安装（包名 `dsh-usage-panel-plus@0.1.3`，与上游 `dsh-usage-statistics-panel` 不冲突）：
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.2
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.3
 ```
 
 或从本仓库源码构建后，把产物（`lib/index.js` 宿主半、`lib/client.js` 与
@@ -115,6 +115,7 @@ DSH web 插件的用量统计面板：按天 / 按小时的 Token 趋势、GitHu
 
 - **底部信息栏增强**：面板底部可开启"精确缓存命中率"（会话底部信息栏的缓存命中率以两位小数显示，如 85.25%）、"会话 Token 明细"（底部信息栏显示总 Token、输入、输入（命中缓存）、输入（未命中缓存）与输出 Token，替代默认的"输入/输出"两项）与"流式吞吐速度"（输出过程中速度读数随每个增量实时刷新为估算值，某一步结束后回到会话累计的精确值；估算以 DeepSeek 公布的字符密度为先验，再用本会话已结算步骤的实测字符/Token 比率校准，读数取最近 2 秒内实际观测到的 Token 增量并做平滑（单帧抖动不会传导到显示），UI 迟发的积压不会被计入，一步中途静默时保持最后一次读数而不是回落到会话平均值）；开关位于"使用统计"面板底部，三个开关同款样式，切换即时生效
 - **历史回扫**：首次启用时枚举并回放既有会话日志；对挂载后才首次观测到的活跃会话，其挂载前的历史会在下一次启动时按事件序号边界回放补全，从安装日起尽量还原历史用量
+- **增量补扫**：启动后每 5 分钟再扫一遍既有会话，把「本进程启动之后」才出现的会话（另一个 profile、CLI 或第二个实例）也纳入统计，不必等下次重启；另一个进程仍在写入的日志会先跳过，等它安静 2 分钟再折叠，避免读到半截日志而漏掉后续事件
 - **本地持久化**：数据写入 `$DSH_HOME/storages/usage_panel_plus.json`（storage-domain），纯本地、无外部依赖
 
 ## 安装
@@ -122,7 +123,7 @@ DSH web 插件的用量统计面板：按天 / 按小时的 Token 趋势、GitHu
 作为独立插件安装（包名 `dsh-usage-panel-plus`，与上游 `dsh-usage-statistics-panel` 不冲突）：
 
 ```sh
-dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.2
+dsh plugin --profile <name> add dsh-usage-panel-plus@0.1.3
 ```
 
 装完**硬刷新浏览器**（Cmd/Ctrl+Shift+R）：client 半的改动 DSH 会热加载，无需重启；仅 host 半（采集/存储/路由）更新时需要重启 DSH。由于包名与版本都独立，市场不会把它当作上游的「升级」，装任一方都不会覆盖另一方。

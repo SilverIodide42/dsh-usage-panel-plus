@@ -149,6 +149,11 @@ export interface BackfillStatus {
     scannedSessions: number;
     lastSessionId?: string;
     error?: string;
+    /** Sessions deferred because another DSH process is still writing their log;
+     *  a later catch-up pass folds them. */
+    pendingSessions?: number;
+    /** Durable writes this generation refused (degraded domain, I/O failure). */
+    recordFailures?: number;
 }
 /** One line of an async-iterable request body read as UTF-8 text. */
 export declare function readJsonBody(req: UsageHttpRequest, maxBytes?: number): Promise<unknown>;
